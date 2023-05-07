@@ -18,8 +18,8 @@ import p2sql
 ## connection_string()
     connection_string(
         Server: str, 
-        Driver = '{SQL Server}', 
         Database = 'master', 
+        Driver = '{SQL Server}', 
         IntegratedSecurity = True, 
         user=None, 
         passw=None
@@ -86,7 +86,7 @@ connection = p2sql.connection(conn_str_master)
 Use executeCreateDB() to create database(s) by using the executeCreateDB function , passing the conneciton variable and a python list of databasename strings
 
 ```python
-p2sql.executeCreateDB(connection,['TestDatabase','databaseTest2'],True)
+p2sql.executeCreateDB(connection(),['TestDatabase','databaseTest2'],True)
 ```
 
 ## getListOfDbs( )
@@ -183,7 +183,15 @@ this will execute the custom created insert query
 Another way to insert values into a table without writing the query is to use the putInTable() function
 
 ## putInTable()
-    putInTable( connection,tablename: str, listOfColumnNames: list, listOfListValues: list ,Database="" , schema='dbo', printQuery = False )
+    putInTable( 
+        connection(),
+        tablename: str, 
+        listOfColumnNames: list, 
+        listOfListValues: list ,
+        Database="" , 
+        schema='dbo', 
+        printQuery = False 
+        )
 
 putInTable() will create and run an insert execute query to the specified table, This function does not return a value, however the printQuery can be set to True to view the query that is inserted
 
@@ -199,7 +207,14 @@ p2sql.putInTable(connection,'TestTable2',columnNamesList, listOfListValues,'data
 ```
 
 ## getFromTable()
-    getFromTable( connection, tablename: str,Database="", printQuery = False, listOfColumnNames = [ '' ] , whereClause = [[]] , schema='dbo' )
+    getFromTable( 
+        connection(), t
+        ablename: str,Database="", 
+        printQuery = False, 
+        listOfColumnNames = [ '' ] , 
+        whereClause = [[]] , 
+        schema='dbo' 
+        )
 
 getFromTable() will run a select query against the conneciotn and  return a list of tuples from the specified table 
 
@@ -210,6 +225,60 @@ Example:
 
 ```python
 p2sql.getFromTable(connection,'TestTable2','databaseTest2')
+```
+
+# merge()
+    merge(
+        values: list, *example: [[]] 
+        columns:list, 
+        targetTable: str, 
+        matchOnSource : list, 
+        matchOnTarget : list, 
+        WHEN_MATCHED_THEN_UPDATE_target = True, 
+        NOT_MATCHED_BY_SOURCE_DELETE = True, 
+        NOT_MATCHED_BY_SOURCE_query = "", 
+        printQuery = False  
+        )
+        
+merge() creates a MERGE query, which combines the INSERT, UPDATE, and the DELETE operations altogether, Creates a tempTable from the supplied lists 
+```python
+
+columns = ['name', 'age', 'location']
+
+values = [
+    ['Big Bird', '32', 'Seasame Street'], 
+    ['Dora', '5', 'The Void']
+    ]
+```
+<sub> Note: you can also use pandas DataFrame by using  tolist() on df values Example: 
+```python
+values = df.values.tolist()  
+columns = df.columns.tolist()
+```
+```python
+mergeQuery =  merge(values,columns,'TestTable',['name'],['name'])
+```
+The merge() function will return a MERGE query
+
+```sql
+ with DF_SQL_TBL_8675 as ( select * from(
+    VALUES ('Big Bird','32','Seasame Street'),('Dora','5','The Void')) tempTable ([name],[age],[location])
+    )
+
+    MERGE TestTable AS Target
+    USING  DF_SQL_TBL_8675      AS Source
+    ON  Source.[name] = Target.[name]
+
+    -- For Inserts
+    WHEN NOT MATCHED BY Target THEN
+        INSERT ([name],[age],[location])
+        VALUES ( Source.[name] , Source.[age] , Source.[location] )
+
+    -- For Updates
+    WHEN MATCHED THEN UPDATE SET
+     Target.[name] = Source.[name] , Target.[age] = Source.[age] , Target.[location] = Source.[location]
+    -- For Deletes
+    WHEN NOT MATCHED BY Source THEN DELETE;
 ```
 
 # Pandas DataFrame Functions
@@ -272,7 +341,7 @@ p2sql.executeQueries(connection,[dataframeQuery],True)
 p2sql.getFromTable(connection,"df_TestTable","databaseTest2",True)
 ```
 
-## df_mergeQuery()
+## df_mergeQueryTables()
     df_mergeQuery(  
         database: str, 
         targetTable: str, 
@@ -285,7 +354,7 @@ p2sql.getFromTable(connection,"df_TestTable","databaseTest2",True)
         )  
   
 
-df_mergeQuery() creates a merge query, merges data from source table to target table.  as long as the supplied dataframe matches the source and target table.
+df_mergeQueryTables() creates a merge query, merges data from source table to target table.  as long as the supplied dataframe matches the source and target table.
 ```sql
  WHEN target table ON target_source_columns  NOT MATCHED BY TARGET   
    then insert source table rows with insert query  
@@ -300,7 +369,7 @@ Unless mergeDelete is set to True,
     then set deleteStatement to whatever query you want to run when not matched by source    
 ```
 ```python
-df_mergeQuery = p2sql.df_mergeQuery("databaseTest2","df_TestTable","TestTable2",['name'],df,True,'')
+df_mergeQueryTables = p2sql.df_mergeQuery("databaseTest2","df_TestTable","TestTable2",['name'],df,True,'')
 
 p2sql.executeQueries(connection,[df_mergeQuery])
 ```

@@ -2,7 +2,7 @@ import pyodbc
 import pandas
 import numpy as np
 
-def connection_string(Server: str, Driver = '{SQL Server}', Database = 'master', IntegratedSecurity = True, user=None, passw=None ):
+def connection_string(Server: str, Database = 'master', Driver = '{SQL Server}',  IntegratedSecurity = True, user=None, passw=None ):
     '''conection_string() stores the conection information, the only parameters that are required are the Server, ODBC Driver
     *Note: It is recommended to supply the databasename, by default "master" will be used* '''
     if IntegratedSecurity:
@@ -101,9 +101,6 @@ def getFromTable(connection, tablename: str,Database="", printQuery = False,list
         connection['cursor'].execute(insertQuery)
     except:
         print('There was an error running query on server, check query by setting printQuery parameter to True')
-    try:
-        connection['conn'].commit()
-    except:
         connection['conn'].close()
 
     return connection['cursor'].fetchall()
@@ -171,6 +168,88 @@ def executeQueries(connection, listOfQueries,printQuery=False):
         except:
             connection['conn'].close()
 
+def merge(values: list,columns:list, targetTable: str, matchOnSource : list, matchOnTarget : list, WHEN_MATCHED_THEN_UPDATE_target = True, NOT_MATCHED_BY_SOURCE_DELETE = True, NOT_MATCHED_BY_SOURCE_query = "", printQuery = False  ):
+    ''''''
+    queryValues = ''
+    colnames = ''
+    matchOn = ''
+    insertColSource = ''
+    updateMatchOn = ''
+    
+    if NOT_MATCHED_BY_SOURCE_DELETE:
+       NOT_MATCHED_BY_SOURCE_query =  "WHEN NOT MATCHED BY Source THEN DELETE;"
+
+    for col in columns:
+        colnames = colnames + f'[{col}],'
+    colnames = colnames.rstrip(',')
+
+ # convert Python data to Temp table 
+    for row in values:
+        fields=''
+        for field in row:
+            fields = fields + f"'{field}',"
+        queryValues =queryValues + f"({fields.rstrip(',')}),"
+    queryValues = queryValues.rstrip(',')
+
+#   For match on
+    i=0
+    while i < len(matchOnSource):
+        matchOn =  matchOn +  f" Source.[{matchOnSource[i]}] = Target.[{matchOnTarget[i]}] ,"
+        i=i+1
+    matchOn = matchOn.rstrip(',')
+
+#   For Inserts
+
+    for col in columns:
+        insertColSource = insertColSource + f" Source.[{col}] ," 
+    insertColSource = insertColSource.rstrip(',')
+
+#   For Updates
+    if WHEN_MATCHED_THEN_UPDATE_target:
+        i=0
+        while i < len(columns):
+            updateMatchOn =  updateMatchOn +  f" Target.[{columns[i]}] = Source.[{columns[i]}] ,"
+            i=i+1
+        updateMatchOn = updateMatchOn.rstrip(',')
+    else:
+        i=0
+        while i < len(columns):
+            updateMatchOn =  updateMatchOn +  f" [{columns[i]}] = Target.[{columns[i]}] ,"
+            i=i+1
+        updateMatchOn = updateMatchOn.rstrip(',')
+
+
+
+    querystring = f"""
+    with DF_SQL_TBL_8675 as ( select * from(
+    VALUES {queryValues}) tempTable ({colnames})
+    )
+
+    MERGE {targetTable} AS Target
+    USING  DF_SQL_TBL_8675	AS Source
+    ON {matchOn}
+        
+    -- For Inserts
+    WHEN NOT MATCHED BY Target THEN
+        INSERT ({colnames}) 
+        VALUES ({insertColSource})
+        
+    -- For Updates
+    WHEN MATCHED THEN UPDATE SET
+    {updateMatchOn}
+    -- For Deletes
+    {NOT_MATCHED_BY_SOURCE_query}       
+
+    """
+
+    if printQuery == True:
+        print(querystring)
+    return querystring
+
+
+
+
+
 ## creates Pandas Dataframe to SQL
 def df_createTblQuery(database: str,tablename: str, dataframe: pandas.DataFrame,printQuery=False,schema='dbo'):
     '''df_createTblQuery(), takes the column headers from a pandas DataFrame and creates a SQL create Table query.
@@ -218,8 +297,8 @@ def df_insertQuery(database: str,tablename: str, dataframe: pandas.DataFrame,pri
     if printQuery == True:
         print(insertQuery)
     return insertQuery
-def df_mergeQuery(database: str,targetTable: str,sourceTable: str, target_source_columns: list, dataframe: pandas.DataFrame, mergeDelete: bool, deleteStatement: str,printQuery=False,schema='dbo' ):
-    '''df_mergeQuery() creates a merge query, merges data from source table to target table.  as long as the supplied dataframe matches the source and target table.
+def df_mergeQueryTables(database: str,targetTable: str,sourceTable: str, target_source_columns: list, dataframe: pandas.DataFrame, mergeDelete: bool, deleteStatement: str,printQuery=False,schema='dbo' ):
+    '''df_mergeQueryTables() creates a merge query, merges data from source table to target table.  as long as the supplied dataframe matches the source and target table.
 
         WHEN target table ON target_source_columns  NOT MATCHED BY TARGET   
         then insert source table rows with insert query  
