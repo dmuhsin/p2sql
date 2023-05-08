@@ -7,6 +7,10 @@
 
 
 # Getting Started
+```python
+pip install p2sql
+```
+
 
 ```python
 import p2sql
